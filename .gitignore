@@ -1,0 +1,12 @@
+.pio/
+.pioenvs/
+.piolibdeps/
+
+build/
+cmake-build-*/
+compile_commands.json
+
+sdkconfig*.old
+
+.vscode/*
+!.vscode/extensions.json
