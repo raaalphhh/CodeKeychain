@@ -26,6 +26,10 @@
 #define HID_KEY_BACKSPACE 0x2A
 #endif
 
+#ifndef HID_KEY_ENTER
+#define HID_KEY_ENTER 0x28
+#endif
+
 typedef struct
 {
     const char *morse;
@@ -95,6 +99,7 @@ static const morse_entry_t morse_table[] = {
 
     {"........", HID_KEY_BACKSPACE, 0},
     {"---------", HID_KEY_BACKSPACE, HID_KEY_MOD_LCTRL},
+    {".-.-", HID_KEY_ENTER, 0}, // Enter / new line
 };
 
 morse_result_t morse_decode(const char *morse)

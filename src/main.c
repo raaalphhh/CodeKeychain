@@ -229,7 +229,8 @@ void hid_main_task(void *pvParameters)
                 {
                     hid_output_send_key(hid_conn_id, result.key, result.modifier);
                     if (strcmp(event.sequence, "........") == 0 ||
-                        strcmp(event.sequence, "--------") == 0)
+                        strcmp(event.sequence, "--------") == 0 || 
+                        strcmp(event.sequence, ".-.-") == 0)
                     {
                         suppress_next_word_gap = 1;
                     }
