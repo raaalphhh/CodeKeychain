@@ -205,6 +205,7 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
 
 void hid_main_task(void *pvParameters)
 {
+    int was_selecting = 0;
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 
@@ -252,18 +253,9 @@ void hid_main_task(void *pvParameters)
                 suppress_next_word_gap = 0;
             }
 
-            if (joystick_input_is_button_held())
-            {
-                int8_t wheel = 0;
+            int morse_button_held = button_input_is_pressed();
 
-                joystick_input_read_scroll_delta(&wheel);
-
-                if (wheel != 0)
-                {
-                    hid_output_mouse_scroll(hid_conn_id, wheel);
-                }
-            }
-            else
+            if (morse_button_held)
             {
                 int8_t dx = 0;
                 int8_t dy = 0;
@@ -272,7 +264,40 @@ void hid_main_task(void *pvParameters)
 
                 if (dx != 0 || dy != 0)
                 {
-                    hid_output_send_mouse_move(hid_conn_id, dx, dy);
+                    hid_output_mouse_drag_move(hid_conn_id, dx, dy);
+                    was_selecting = 1;
+                }
+            }
+            else
+            {
+                if (was_selecting)
+                {
+                    hid_output_mouse_release(hid_conn_id);
+                    was_selecting = 0;
+                }
+
+                if (joystick_input_is_button_held())
+                {
+                    int8_t wheel = 0;
+
+                    joystick_input_read_scroll_delta(&wheel);
+
+                    if (wheel != 0)
+                    {
+                        hid_output_mouse_scroll(hid_conn_id, wheel);
+                    }
+                }
+                else
+                {
+                    int8_t dx = 0;
+                    int8_t dy = 0;
+
+                    joystick_input_read_mouse_delta(&dx, &dy);
+
+                    if (dx != 0 || dy != 0)
+                    {
+                        hid_output_send_mouse_move(hid_conn_id, dx, dy);
+                    }
                 }
             }
 

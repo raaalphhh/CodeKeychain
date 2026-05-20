@@ -32,3 +32,15 @@ void hid_output_mouse_scroll(uint16_t conn_id, int8_t wheel)
 {
     esp_hidd_send_mouse_value(conn_id, 0, 0, 0, wheel);
 }
+
+void hid_output_mouse_drag_move(uint16_t conn_id, int8_t dx, int8_t dy)
+{
+    // Left mouse button held while moving
+    esp_hidd_send_mouse_value(conn_id, 0x01, dx, dy, 0);
+}
+
+void hid_output_mouse_release(uint16_t conn_id)
+{
+    // Release all mouse buttons
+    esp_hidd_send_mouse_value(conn_id, 0, 0, 0, 0);
+}
