@@ -5,6 +5,7 @@ idf_component_register(
         "hid_output.c"
         "button_input.c"
         "morse_input.c"
+        "joystick_input.c"
         "esp_hidd_prf_api.c"
         "hid_dev.c"
         "hid_device_le_prf.c"

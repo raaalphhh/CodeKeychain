@@ -30,6 +30,7 @@
 #include "hid_output.h"
 #include "button_input.h"
 #include "morse_input.h"
+#include "joystick_input.h"
 
 /**
  * Brief:
@@ -50,7 +51,7 @@
  * if you got `GATT_INSUF_ENCRYPTION` error, please ignore.
  */
 
-#define HID_DEMO_TAG "HID_DEMO"
+#define TAG "MORSE_HID"
 
 #ifndef HID_KEY_SPACE
 #define HID_KEY_SPACE 0x2C
@@ -58,14 +59,13 @@
 
 static uint16_t hid_conn_id = 0;
 static bool sec_conn = false;
-static bool send_volum_up = false;
 #define CHAR_DECLARATION_SIZE (sizeof(uint8_t))
 
 int suppress_next_word_gap = 0;
 
 static void hidd_event_callback(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *param);
 
-#define HIDD_DEVICE_NAME "HID"
+#define HIDD_DEVICE_NAME "Code Keychain"
 static uint8_t hidd_service_uuid128[] = {
     /* LSB <--------------------------------------------------------------------------------> MSB */
     // first uuid, 16bit, [12],[13] is the value
@@ -136,27 +136,27 @@ static void hidd_event_callback(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *
         break;
     case ESP_HIDD_EVENT_BLE_CONNECT:
     {
-        ESP_LOGI(HID_DEMO_TAG, "ESP_HIDD_EVENT_BLE_CONNECT");
+        ESP_LOGI(TAG, "ESP_HIDD_EVENT_BLE_CONNECT");
         hid_conn_id = param->connect.conn_id;
         break;
     }
     case ESP_HIDD_EVENT_BLE_DISCONNECT:
     {
         sec_conn = false;
-        ESP_LOGI(HID_DEMO_TAG, "ESP_HIDD_EVENT_BLE_DISCONNECT");
+        ESP_LOGI(TAG, "ESP_HIDD_EVENT_BLE_DISCONNECT");
         esp_ble_gap_start_advertising(&hidd_adv_params);
         break;
     }
     case ESP_HIDD_EVENT_BLE_VENDOR_REPORT_WRITE_EVT:
     {
-        ESP_LOGI(HID_DEMO_TAG, "%s, ESP_HIDD_EVENT_BLE_VENDOR_REPORT_WRITE_EVT", __func__);
-        ESP_LOG_BUFFER_HEX(HID_DEMO_TAG, param->vendor_write.data, param->vendor_write.length);
+        ESP_LOGI(TAG, "%s, ESP_HIDD_EVENT_BLE_VENDOR_REPORT_WRITE_EVT", __func__);
+        ESP_LOG_BUFFER_HEX(TAG, param->vendor_write.data, param->vendor_write.length);
         break;
     }
     case ESP_HIDD_EVENT_BLE_LED_REPORT_WRITE_EVT:
     {
-        ESP_LOGI(HID_DEMO_TAG, "ESP_HIDD_EVENT_BLE_LED_REPORT_WRITE_EVT");
-        ESP_LOG_BUFFER_HEX(HID_DEMO_TAG, param->led_write.data, param->led_write.length);
+        ESP_LOGI(TAG, "ESP_HIDD_EVENT_BLE_LED_REPORT_WRITE_EVT");
+        ESP_LOG_BUFFER_HEX(TAG, param->led_write.data, param->led_write.length);
         break;
     }
     default:
@@ -175,26 +175,26 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
     case ESP_GAP_BLE_SEC_REQ_EVT:
         for (int i = 0; i < ESP_BD_ADDR_LEN; i++)
         {
-            ESP_LOGD(HID_DEMO_TAG, "%x:", param->ble_security.ble_req.bd_addr[i]);
+            ESP_LOGD(TAG, "%x:", param->ble_security.ble_req.bd_addr[i]);
         }
         esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
         break;
     case ESP_GAP_BLE_AUTH_CMPL_EVT:
         esp_bd_addr_t bd_addr;
         memcpy(bd_addr, param->ble_security.auth_cmpl.bd_addr, sizeof(esp_bd_addr_t));
-        ESP_LOGI(HID_DEMO_TAG, "remote BD_ADDR: %08x%04x",
+        ESP_LOGI(TAG, "remote BD_ADDR: %08x%04x",
                  (bd_addr[0] << 24) + (bd_addr[1] << 16) + (bd_addr[2] << 8) + bd_addr[3],
                  (bd_addr[4] << 8) + bd_addr[5]);
-        ESP_LOGI(HID_DEMO_TAG, "address type = %d", param->ble_security.auth_cmpl.addr_type);
-        ESP_LOGI(HID_DEMO_TAG, "pair status = %s", param->ble_security.auth_cmpl.success ? "success" : "fail");
+        ESP_LOGI(TAG, "address type = %d", param->ble_security.auth_cmpl.addr_type);
+        ESP_LOGI(TAG, "pair status = %s", param->ble_security.auth_cmpl.success ? "success" : "fail");
         if (param->ble_security.auth_cmpl.success)
         {
             sec_conn = true;
-            ESP_LOGI(HID_DEMO_TAG, "secure connection established.");
+            ESP_LOGI(TAG, "secure connection established.");
         }
         else
         {
-            ESP_LOGE(HID_DEMO_TAG, "pairing failed, reason = 0x%x",
+            ESP_LOGE(TAG, "pairing failed, reason = 0x%x",
                      param->ble_security.auth_cmpl.fail_reason);
         }
         break;
@@ -203,7 +203,7 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
     }
 }
 
-void hid_demo_task(void *pvParameters)
+void hid_main_task(void *pvParameters)
 {
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);
@@ -222,7 +222,7 @@ void hid_demo_task(void *pvParameters)
             {
                 morse_result_t result = morse_decode(event.sequence);
 
-                ESP_LOGI(HID_DEMO_TAG, "Decode Morse: %s", event.sequence);
+                ESP_LOGI(TAG, "Decode Morse: %s", event.sequence);
 
                 if (result.found)
                 {
@@ -239,7 +239,7 @@ void hid_demo_task(void *pvParameters)
                 }
                 else
                 {
-                    ESP_LOGW(HID_DEMO_TAG, "Unknown Morse: %s", event.sequence);
+                    ESP_LOGW(TAG, "Unknown Morse: %s", event.sequence);
                 }
             }
             else if (event.type == MORSE_EVENT_WORD_GAP)
@@ -250,6 +250,47 @@ void hid_demo_task(void *pvParameters)
                 }
 
                 suppress_next_word_gap = 0;
+            }
+
+            if (joystick_input_is_button_held())
+            {
+                int8_t wheel = 0;
+
+                joystick_input_read_scroll_delta(&wheel);
+
+                if (wheel != 0)
+                {
+                    hid_output_mouse_scroll(hid_conn_id, wheel);
+                }
+            }
+            else
+            {
+                int8_t dx = 0;
+                int8_t dy = 0;
+
+                joystick_input_read_mouse_delta(&dx, &dy);
+
+                if (dx != 0 || dy != 0)
+                {
+                    hid_output_send_mouse_move(hid_conn_id, dx, dy);
+                }
+            }
+
+            joystick_event_t joy_event;
+            joystick_input_update_button(now_ms, &joy_event);
+
+            if (joy_event.type == JOYSTICK_EVENT_LEFT_CLICK)
+            {
+                hid_output_mouse_click(hid_conn_id, 0x01);
+            }
+            else if (joy_event.type == JOYSTICK_EVENT_RIGHT_CLICK)
+            {
+                hid_output_mouse_click(hid_conn_id, 0x02);
+            }
+            else if (joy_event.type == JOYSTICK_EVENT_SPEED_CYCLE)
+            {
+                joystick_input_cycle_speed();
+                ESP_LOGI(TAG, "Speed cycle requested");
             }
         }
 
@@ -272,6 +313,7 @@ void app_main(void)
 
     button_input_init();
     morse_input_init();
+    joystick_input_init();
 
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
 
@@ -279,14 +321,14 @@ void app_main(void)
     ret = esp_bt_controller_init(&bt_cfg);
     if (ret)
     {
-        ESP_LOGE(HID_DEMO_TAG, "%s initialize controller failed", __func__);
+        ESP_LOGE(TAG, "%s initialize controller failed", __func__);
         return;
     }
 
     ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
     if (ret)
     {
-        ESP_LOGE(HID_DEMO_TAG, "%s enable controller failed", __func__);
+        ESP_LOGE(TAG, "%s enable controller failed", __func__);
         return;
     }
 
@@ -294,20 +336,20 @@ void app_main(void)
     ret = esp_bluedroid_init_with_cfg(&cfg);
     if (ret)
     {
-        ESP_LOGE(HID_DEMO_TAG, "%s init bluedroid failed", __func__);
+        ESP_LOGE(TAG, "%s init bluedroid failed", __func__);
         return;
     }
 
     ret = esp_bluedroid_enable();
     if (ret)
     {
-        ESP_LOGE(HID_DEMO_TAG, "%s init bluedroid failed", __func__);
+        ESP_LOGE(TAG, "%s init bluedroid failed", __func__);
         return;
     }
 
     if ((ret = esp_hidd_profile_init()) != ESP_OK)
     {
-        ESP_LOGE(HID_DEMO_TAG, "%s init bluedroid failed", __func__);
+        ESP_LOGE(TAG, "%s init bluedroid failed", __func__);
     }
 
     /// register the callback function to the gap module
@@ -330,5 +372,5 @@ void app_main(void)
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, sizeof(uint8_t));
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(uint8_t));
 
-    xTaskCreate(&hid_demo_task, "hid_task", 2048, NULL, 5, NULL);
+    xTaskCreate(&hid_main_task, "hid_task", 2048, NULL, 5, NULL);
 }

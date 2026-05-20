@@ -10,3 +10,19 @@ sdkconfig*.old
 
 .vscode/*
 !.vscode/extensions.json
+
+local_notes/
+
+
+build/
+.vscode/
+.idea/
+.DS_Store
+*.bin
+*.elf
+*.map
+*.log
+.env
+sdkconfig.old
+managed_components/
+.agent.md
