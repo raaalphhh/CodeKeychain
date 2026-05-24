@@ -1,28 +1,39 @@
-.pio/
-.pioenvs/
-.piolibdeps/
+# PlatformIO / ESP-IDF generated files
+**/.pio/
+**/.pioenvs/
+**/.piolibdeps/
+**/build/
+**/cmake-build-*/
+**/compile_commands.json
+**/managed_components/
+**/sdkconfig*.old
 
-build/
-cmake-build-*/
-compile_commands.json
+# Private local study notes
+**/local_notes/
 
-sdkconfig*.old
-
-.vscode/*
-!.vscode/extensions.json
-
-local_notes/
-
-
-build/
-.vscode/
-.idea/
+# Editor/local files
+**/.vscode/*
+!**/.vscode/extensions.json
+**/.idea/
+**/.history/
 .DS_Store
+
+# Firmware build artifacts
 *.bin
 *.elf
 *.map
 *.log
 .env
-sdkconfig.old
-managed_components/
+
+# KiCad generated/local files
+*-backups/
+fp-info-cache
+*.kicad_prl
+*.bak
+
+# Codex/local notes
 .agent.md
+
+*.lck
+*.code-workspace
+*.docx
