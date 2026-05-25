@@ -31,6 +31,7 @@
 #include "button_input.h"
 #include "morse_input.h"
 #include "joystick_input.h"
+#include "ble_security.h"
 
 /**
  * Brief:
@@ -58,12 +59,16 @@
 #endif
 
 static uint16_t hid_conn_id = 0;
-static bool sec_conn = false;
+bool sec_conn = false;
+static bool pairing_mode = false;
 #define CHAR_DECLARATION_SIZE (sizeof(uint8_t))
 
 int suppress_next_word_gap = 0;
 
 static void hidd_event_callback(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *param);
+
+esp_bd_addr_t connected_bda;
+bool connected_bda_valid = false;
 
 #define HIDD_DEVICE_NAME "Code Keychain"
 static uint8_t hidd_service_uuid128[] = {
@@ -104,8 +109,8 @@ static esp_ble_adv_data_t hidd_adv_data = {
 };
 
 static esp_ble_adv_params_t hidd_adv_params = {
-    .adv_int_min = ESP_BLE_GAP_ADV_ITVL_MS(20),
-    .adv_int_max = ESP_BLE_GAP_ADV_ITVL_MS(30),
+    .adv_int_min = ESP_BLE_GAP_ADV_ITVL_MS(100),
+    .adv_int_max = ESP_BLE_GAP_ADV_ITVL_MS(200),
     .adv_type = ADV_TYPE_IND,
     .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
     //.peer_addr            =
@@ -177,7 +182,17 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
         {
             ESP_LOGD(TAG, "%x:", param->ble_security.ble_req.bd_addr[i]);
         }
-        esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
+
+        if (ble_security_is_blocked_device(param->ble_security.ble_req.bd_addr))
+        {
+            ESP_LOGW(TAG, "Pairing rejected: previous device temporarily blocked");
+            esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, false);
+        }
+        else if (ble_security_is_pairing_window_active())
+        {
+            ESP_LOGI(TAG, "Pairing accepted: pairing window active");
+            esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
+        }
         break;
     case ESP_GAP_BLE_AUTH_CMPL_EVT:
         esp_bd_addr_t bd_addr;
@@ -191,6 +206,9 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
         {
             sec_conn = true;
             ESP_LOGI(TAG, "secure connection established.");
+            memcpy(connected_bda, param->ble_security.auth_cmpl.bd_addr, sizeof(esp_bd_addr_t));
+            connected_bda_valid = true;
+            ble_security_close_pairing_window();
         }
         else
         {
@@ -215,12 +233,22 @@ void hid_main_task(void *pvParameters)
         {
             int button_pressed = button_input_is_pressed();
             int64_t now_ms = esp_timer_get_time() / 1000;
+            ble_security_update(now_ms);
 
             morse_event_t event;
             morse_input_update(button_pressed, now_ms, &event);
 
             if (event.type == MORSE_EVENT_LETTER_READY)
             {
+                if (strcmp(event.sequence, "...---...") == 0)
+                {
+                    ESP_LOGW(TAG, "Pairing reset command received");
+                    
+                    ble_security_enter_pairing_mode();
+
+                    suppress_next_word_gap = 1;
+                    continue;
+                }
                 morse_result_t result = morse_decode(event.sequence);
 
                 ESP_LOGI(TAG, "Decode Morse: %s", event.sequence);
@@ -229,7 +257,7 @@ void hid_main_task(void *pvParameters)
                 {
                     hid_output_send_key(hid_conn_id, result.key, result.modifier);
                     if (strcmp(event.sequence, "........") == 0 ||
-                        strcmp(event.sequence, "--------") == 0 || 
+                        strcmp(event.sequence, "--------") == 0 ||
                         strcmp(event.sequence, ".-.-") == 0)
                     {
                         suppress_next_word_gap = 1;
@@ -320,7 +348,7 @@ void hid_main_task(void *pvParameters)
             }
         }
 
-        vTaskDelay(10 / portTICK_PERIOD_MS);
+        vTaskDelay(15 / portTICK_PERIOD_MS);
     }
 }
 
@@ -338,6 +366,18 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
 
     button_input_init();
+
+    pairing_mode = button_input_is_pressed();
+
+    if (pairing_mode)
+    {
+        ESP_LOGI(TAG, "PAIRING MODE: new BLE pairing allowed");
+    }
+    else
+    {
+        ESP_LOGI(TAG, "SECURE MODE: new BLE pairing blocked");
+    }
+
     morse_input_init();
     joystick_input_init();
 
