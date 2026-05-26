@@ -98,3 +98,12 @@ void morse_input_update(int button_pressed, int64_t now_ms, morse_event_t *event
         }
     }
 }
+
+void morse_input_reset(void)
+{
+    morse_index = 0;
+    button_was_pressed = 0;
+    press_start_time = 0;
+    last_release_time = 0;
+    morse_buffer[0] = '\0';
+}

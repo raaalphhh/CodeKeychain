@@ -20,3 +20,4 @@ typedef struct {
 
 void morse_input_init(void);
 void morse_input_update(int button_pressed, int64_t now_ms, morse_event_t *event);
+void morse_input_reset(void);

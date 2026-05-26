@@ -7,11 +7,11 @@
 #include "freertos/task.h"
 #include "driver/gpio.h"
 
-#define JOY_X_ADC_CHANNEL ADC_CHANNEL_0 // GPIO0
-#define JOY_Y_ADC_CHANNEL ADC_CHANNEL_1 // GPIO1
+#define JOY_X_ADC_CHANNEL ADC_CHANNEL_4
+#define JOY_Y_ADC_CHANNEL ADC_CHANNEL_5
 #define JOY_ORIENTATION 0
 
-#define JOY_SW_GPIO GPIO_NUM_2
+#define JOY_SW_GPIO GPIO_NUM_7
 #define CLICK_GAP_MS 350
 
 #define JOY_DEADZONE 350
@@ -31,7 +31,8 @@ typedef enum
 {
     MOUSE_SPEED_LOW = 0,
     MOUSE_SPEED_MID,
-    MOUSE_SPEED_FAST
+    MOUSE_SPEED_FAST,
+    MOUSE_SPEED_TURBO
 } mouse_speed_t;
 
 static mouse_speed_t mouse_speed = MOUSE_SPEED_MID;
@@ -41,14 +42,17 @@ static int get_speed_divisor(void)
     switch (mouse_speed)
     {
     case MOUSE_SPEED_LOW:
-        return 500;
+        return 400;
 
     case MOUSE_SPEED_FAST:
-        return 220;
+        return 120;
+
+    case MOUSE_SPEED_TURBO:
+        return 80;
 
     case MOUSE_SPEED_MID:
     default:
-        return 350;
+        return 220;
     }
 }
 
@@ -57,14 +61,17 @@ static int get_max_delta(void)
     switch (mouse_speed)
     {
     case MOUSE_SPEED_LOW:
-        return 6;
+        return 8;
 
     case MOUSE_SPEED_FAST:
-        return 18;
+        return 28;
+
+    case MOUSE_SPEED_TURBO:
+        return 40;
 
     case MOUSE_SPEED_MID:
     default:
-        return 10;
+        return 16;
     }
 }
 
@@ -106,6 +113,11 @@ void joystick_input_cycle_speed(void)
     {
         mouse_speed = MOUSE_SPEED_FAST;
         ESP_LOGI(TAG, "Mouse speed: FAST");
+    }
+    else if (mouse_speed == MOUSE_SPEED_FAST)
+    {
+        mouse_speed = MOUSE_SPEED_TURBO;
+        ESP_LOGI(TAG, "Mouse speed: TURBO");
     }
     else
     {

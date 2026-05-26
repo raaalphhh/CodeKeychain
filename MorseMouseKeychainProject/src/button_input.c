@@ -2,7 +2,7 @@
 
 #include "driver/gpio.h"
 
-#define BUTTON_GPIO GPIO_NUM_9
+#define BUTTON_GPIO GPIO_NUM_4
 
 void button_input_init(void)
 {

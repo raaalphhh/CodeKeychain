@@ -32,6 +32,7 @@
 #include "morse_input.h"
 #include "joystick_input.h"
 #include "ble_security.h"
+#include "usb_hid_output.h"
 
 /**
  * Brief:
@@ -58,6 +59,14 @@
 #define HID_KEY_SPACE 0x2C
 #endif
 
+#ifndef HID_KEY_CAPSLOCK
+#define HID_KEY_CAPSLOCK 0x39
+#endif
+
+#ifndef HID_KEY_MOD_LSHIFT
+#define HID_KEY_MOD_LSHIFT 0x02
+#endif
+
 static uint16_t hid_conn_id = 0;
 bool sec_conn = false;
 static bool pairing_mode = false;
@@ -69,6 +78,12 @@ static void hidd_event_callback(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *
 
 esp_bd_addr_t connected_bda;
 bool connected_bda_valid = false;
+
+int selection_mode = 0;
+
+static int capitalize_next = 0;
+
+static bool usb_mode = false;
 
 #define HIDD_DEVICE_NAME "Code Keychain"
 static uint8_t hidd_service_uuid128[] = {
@@ -143,13 +158,23 @@ static void hidd_event_callback(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *
     {
         ESP_LOGI(TAG, "ESP_HIDD_EVENT_BLE_CONNECT");
         hid_conn_id = param->connect.conn_id;
+        sec_conn = true;
+
+        esp_ble_gap_stop_advertising();
+
         break;
     }
     case ESP_HIDD_EVENT_BLE_DISCONNECT:
     {
-        sec_conn = false;
         ESP_LOGI(TAG, "ESP_HIDD_EVENT_BLE_DISCONNECT");
-        esp_ble_gap_start_advertising(&hidd_adv_params);
+        sec_conn = false;
+        connected_bda_valid = false;
+
+        if (!usb_mode)
+        {
+            esp_ble_gap_start_advertising(&hidd_adv_params);
+        }
+
         break;
     }
     case ESP_HIDD_EVENT_BLE_VENDOR_REPORT_WRITE_EVT:
@@ -224,67 +249,110 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
 void hid_main_task(void *pvParameters)
 {
     int was_selecting = 0;
+    int selection_mode = 0;
+    int capitalize_next = 0;
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 
     while (1)
     {
-        if (sec_conn)
+
+        int button_pressed = button_input_is_pressed();
+        int64_t now_ms = esp_timer_get_time() / 1000;
+        int joystick_sw_held = joystick_input_is_button_held();
+        ble_security_update(now_ms);
+
+        morse_event_t event = {0};
+
+        if (!selection_mode && joystick_sw_held && button_pressed)
         {
-            int button_pressed = button_input_is_pressed();
-            int64_t now_ms = esp_timer_get_time() / 1000;
-            ble_security_update(now_ms);
+            selection_mode = 1;
+            suppress_next_word_gap = 1;
+            morse_input_reset();
+        }
 
-            morse_event_t event;
+        if (!selection_mode)
+        {
             morse_input_update(button_pressed, now_ms, &event);
+        }
+        else
+        {
+            event.type = MORSE_EVENT_NONE;
+        }
 
-            if (event.type == MORSE_EVENT_LETTER_READY)
+        if (event.type == MORSE_EVENT_LETTER_READY)
+        {
+            if (strcmp(event.sequence, "...---...") == 0)
             {
-                if (strcmp(event.sequence, "...---...") == 0)
-                {
-                    ESP_LOGW(TAG, "Pairing reset command received");
-                    
-                    ble_security_enter_pairing_mode();
+                ESP_LOGW(TAG, "Pairing reset command received");
 
-                    suppress_next_word_gap = 1;
-                    continue;
-                }
-                morse_result_t result = morse_decode(event.sequence);
+                ble_security_enter_pairing_mode();
 
-                ESP_LOGI(TAG, "Decode Morse: %s", event.sequence);
-
-                if (result.found)
-                {
-                    hid_output_send_key(hid_conn_id, result.key, result.modifier);
-                    if (strcmp(event.sequence, "........") == 0 ||
-                        strcmp(event.sequence, "--------") == 0 ||
-                        strcmp(event.sequence, ".-.-") == 0)
-                    {
-                        suppress_next_word_gap = 1;
-                    }
-                    else
-                    {
-                        suppress_next_word_gap = 0;
-                    }
-                }
-                else
-                {
-                    ESP_LOGW(TAG, "Unknown Morse: %s", event.sequence);
-                }
-            }
-            else if (event.type == MORSE_EVENT_WORD_GAP)
-            {
-                if (!suppress_next_word_gap)
-                {
-                    hid_output_send_key(hid_conn_id, HID_KEY_SPACE, 0);
-                }
-
-                suppress_next_word_gap = 0;
+                suppress_next_word_gap = 1;
+                continue;
             }
 
-            int morse_button_held = button_input_is_pressed();
+            if (strcmp(event.sequence, "...--.") == 0)
+            {
+                ESP_LOGI(TAG, "Capitalize next letter");
+                capitalize_next = 1;
+                suppress_next_word_gap = 1;
+                continue;
+            }
 
-            if (morse_button_held)
+            if (strcmp(event.sequence, "...---") == 0)
+            {
+                ESP_LOGI(TAG, "Caps Lock toggle");
+                hid_output_send_key(hid_conn_id, HID_KEY_CAPSLOCK, 0);
+                suppress_next_word_gap = 1;
+                continue;
+            }
+
+            morse_result_t result = morse_decode(event.sequence);
+
+            ESP_LOGI(TAG, "Decode Morse: %s", event.sequence);
+
+            if (result.found)
+            {
+                uint8_t modifier = result.modifier;
+
+                if (capitalize_next)
+                {
+                    modifier |= HID_KEY_MOD_LSHIFT;
+                    capitalize_next = 0;
+                }
+
+                hid_output_send_key(hid_conn_id, result.key, modifier);
+
+                // if (strcmp(event.sequence, "........") == 0 ||
+                //     strcmp(event.sequence, "--------") == 0 ||
+                //     strcmp(event.sequence, ".-.-") == 0)
+                // {
+                //     suppress_next_word_gap = 1;
+                // }
+                // else
+                // {
+                //     suppress_next_word_gap = 0;
+                // }
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Unknown Morse: %s", event.sequence);
+            }
+        }
+        // else if (event.type == MORSE_EVENT_WORD_GAP)
+        // {
+        //     if (!suppress_next_word_gap)
+        //     {
+        //         hid_output_send_key(hid_conn_id, HID_KEY_SPACE, 0);
+        //     }
+
+        //     suppress_next_word_gap = 0;
+        // }
+
+        if (selection_mode)
+        {
+            if (button_pressed)
             {
                 int8_t dx = 0;
                 int8_t dy = 0;
@@ -305,50 +373,60 @@ void hid_main_task(void *pvParameters)
                     was_selecting = 0;
                 }
 
-                if (joystick_input_is_button_held())
-                {
-                    int8_t wheel = 0;
-
-                    joystick_input_read_scroll_delta(&wheel);
-
-                    if (wheel != 0)
-                    {
-                        hid_output_mouse_scroll(hid_conn_id, wheel);
-                    }
-                }
-                else
-                {
-                    int8_t dx = 0;
-                    int8_t dy = 0;
-
-                    joystick_input_read_mouse_delta(&dx, &dy);
-
-                    if (dx != 0 || dy != 0)
-                    {
-                        hid_output_send_mouse_move(hid_conn_id, dx, dy);
-                    }
-                }
+                selection_mode = 0;
+                suppress_next_word_gap = 1;
+                morse_input_reset();
             }
+        }
+        else if (joystick_sw_held)
+        {
+            int8_t wheel = 0;
 
-            joystick_event_t joy_event;
-            joystick_input_update_button(now_ms, &joy_event);
+            joystick_input_read_scroll_delta(&wheel);
 
-            if (joy_event.type == JOYSTICK_EVENT_LEFT_CLICK)
+            if (wheel != 0)
             {
-                hid_output_mouse_click(hid_conn_id, 0x01);
+                hid_output_mouse_scroll(hid_conn_id, wheel);
             }
-            else if (joy_event.type == JOYSTICK_EVENT_RIGHT_CLICK)
+        }
+        else
+        {
+            int8_t dx = 0;
+            int8_t dy = 0;
+
+            joystick_input_read_mouse_delta(&dx, &dy);
+
+            if (dx != 0 || dy != 0)
             {
-                hid_output_mouse_click(hid_conn_id, 0x02);
-            }
-            else if (joy_event.type == JOYSTICK_EVENT_SPEED_CYCLE)
-            {
-                joystick_input_cycle_speed();
-                ESP_LOGI(TAG, "Speed cycle requested");
+                hid_output_send_mouse_move(hid_conn_id, dx, dy);
             }
         }
 
-        vTaskDelay(15 / portTICK_PERIOD_MS);
+        joystick_event_t joy_event;
+        joystick_input_update_button(now_ms, &joy_event);
+
+        if (joy_event.type == JOYSTICK_EVENT_LEFT_CLICK)
+        {
+            hid_output_mouse_click(hid_conn_id, 0x01);
+        }
+        else if (joy_event.type == JOYSTICK_EVENT_RIGHT_CLICK)
+        {
+            hid_output_mouse_click(hid_conn_id, 0x02);
+        }
+        else if (joy_event.type == JOYSTICK_EVENT_SPEED_CYCLE)
+        {
+            joystick_input_cycle_speed();
+            ESP_LOGI(TAG, "Speed cycle requested");
+        }
+
+        if (usb_mode)
+        {
+            vTaskDelay(10 / portTICK_PERIOD_MS);
+        }
+        else
+        {
+            vTaskDelay(30 / portTICK_PERIOD_MS);
+        }
     }
 }
 
@@ -380,63 +458,94 @@ void app_main(void)
 
     morse_input_init();
     joystick_input_init();
+    usb_hid_output_init();
 
-    ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-    ret = esp_bt_controller_init(&bt_cfg);
-    if (ret)
+    usb_mode = usb_hid_output_is_ready();
+
+    if (!usb_mode)
     {
-        ESP_LOGE(TAG, "%s initialize controller failed", __func__);
-        return;
-    }
+        ESP_LOGI(TAG, "BLE mode enabled");
 
-    ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
-    if (ret)
+        ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
+
+        esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+
+        ret = esp_bt_controller_init(&bt_cfg);
+        if (ret)
+        {
+            ESP_LOGE(TAG, "%s initialize controller failed", __func__);
+            return;
+        }
+
+        ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
+        if (ret)
+        {
+            ESP_LOGE(TAG, "%s enable controller failed", __func__);
+            return;
+        }
+
+        esp_bluedroid_config_t cfg = BT_BLUEDROID_INIT_CONFIG_DEFAULT();
+
+        ret = esp_bluedroid_init_with_cfg(&cfg);
+        if (ret)
+        {
+            ESP_LOGE(TAG, "%s init bluedroid failed", __func__);
+            return;
+        }
+
+        ret = esp_bluedroid_enable();
+        if (ret)
+        {
+            ESP_LOGE(TAG, "%s enable bluedroid failed", __func__);
+            return;
+        }
+
+        if ((ret = esp_hidd_profile_init()) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "%s init hidd failed", __func__);
+        }
+
+        esp_ble_gap_register_callback(gap_event_handler);
+        esp_hidd_register_callbacks(hidd_event_callback);
+
+        esp_ble_auth_req_t auth_req = ESP_LE_AUTH_BOND;
+        esp_ble_io_cap_t iocap = ESP_IO_CAP_NONE;
+
+        uint8_t key_size = 16;
+        uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+        uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+
+        esp_ble_gap_set_security_param(
+            ESP_BLE_SM_AUTHEN_REQ_MODE,
+            &auth_req,
+            sizeof(uint8_t));
+
+        esp_ble_gap_set_security_param(
+            ESP_BLE_SM_IOCAP_MODE,
+            &iocap,
+            sizeof(uint8_t));
+
+        esp_ble_gap_set_security_param(
+            ESP_BLE_SM_MAX_KEY_SIZE,
+            &key_size,
+            sizeof(uint8_t));
+
+        esp_ble_gap_set_security_param(
+            ESP_BLE_SM_SET_INIT_KEY,
+            &init_key,
+            sizeof(uint8_t));
+
+        esp_ble_gap_set_security_param(
+            ESP_BLE_SM_SET_RSP_KEY,
+            &rsp_key,
+            sizeof(uint8_t));
+    }
+    else
     {
-        ESP_LOGE(TAG, "%s enable controller failed", __func__);
-        return;
+        ESP_LOGI(TAG, "USB mode detected, BLE disabled");
     }
-
-    esp_bluedroid_config_t cfg = BT_BLUEDROID_INIT_CONFIG_DEFAULT();
-    ret = esp_bluedroid_init_with_cfg(&cfg);
-    if (ret)
-    {
-        ESP_LOGE(TAG, "%s init bluedroid failed", __func__);
-        return;
-    }
-
-    ret = esp_bluedroid_enable();
-    if (ret)
-    {
-        ESP_LOGE(TAG, "%s init bluedroid failed", __func__);
-        return;
-    }
-
-    if ((ret = esp_hidd_profile_init()) != ESP_OK)
-    {
-        ESP_LOGE(TAG, "%s init bluedroid failed", __func__);
-    }
-
-    /// register the callback function to the gap module
-    esp_ble_gap_register_callback(gap_event_handler);
-    esp_hidd_register_callbacks(hidd_event_callback);
-
-    /* set the security iocap & auth_req & key size & init key response key parameters to the stack*/
-    esp_ble_auth_req_t auth_req = ESP_LE_AUTH_BOND; // bonding with peer device after authentication
-    esp_ble_io_cap_t iocap = ESP_IO_CAP_NONE;       // set the IO capability to No output No input
-    uint8_t key_size = 16;                          // the key size should be 7~16 bytes
-    uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
-    uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
-    esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, sizeof(uint8_t));
-    esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, sizeof(uint8_t));
-    esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, sizeof(uint8_t));
-    /* If your BLE device act as a Slave, the init_key means you hope which types of key of the master should distribute to you,
-    and the response key means which key you can distribute to the Master;
-    If your BLE device act as a master, the response key means you hope which types of key of the slave should distribute to you,
-    and the init key means which key you can distribute to the slave. */
-    esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, sizeof(uint8_t));
-    esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(uint8_t));
 
     xTaskCreate(&hid_main_task, "hid_task", 2048, NULL, 5, NULL);
 }
