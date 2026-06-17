@@ -86,6 +86,7 @@ static const morse_entry_t morse_table[] = {
     {".-.-.-", HID_KEY_DOT, 0},                         // .
     {"--..--", HID_KEY_COMMA, 0},                       // ,
     {"..--..", HID_KEY_SLASH, HID_KEY_MOD_LSHIFT},      // ?
+    {"-.-.--", HID_KEY_1, HID_KEY_MOD_LSHIFT},          // !
     {".----.", HID_KEY_APOSTROPHE, 0},                  // '
     {"-..-.", HID_KEY_SLASH, 0},                        // /
     {"-.--.", HID_KEY_9, HID_KEY_MOD_LSHIFT},           // (

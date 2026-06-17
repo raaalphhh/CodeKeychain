@@ -9,6 +9,8 @@
 
 static const char *TAG = "USB_HID";
 
+static bool usb_hid_ready = false;
+
 #define EPNUM_HID   0x81
 #define CONFIG_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN)
 
@@ -35,6 +37,27 @@ static const uint8_t configuration_descriptor[] = {
         16,
         10)
 };
+
+void tud_mount_cb(void)
+{
+    usb_hid_ready = true;
+}
+
+void tud_umount_cb(void)
+{
+    usb_hid_ready = false;
+}
+
+void tud_suspend_cb(bool remote_wakeup_en)
+{
+    (void) remote_wakeup_en;
+    usb_hid_ready = false;
+}
+
+void tud_resume_cb(void)
+{
+    usb_hid_ready = tud_mounted();
+}
 
 const uint8_t *tud_hid_descriptor_report_cb(uint8_t instance)
 {
@@ -113,5 +136,5 @@ void usb_hid_output_send_mouse_move(int8_t dx, int8_t dy)
 
 int usb_hid_output_is_ready(void)
 {
-    return tud_mounted();
+    return usb_hid_ready;
 }

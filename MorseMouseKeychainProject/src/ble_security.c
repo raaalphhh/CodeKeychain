@@ -24,6 +24,13 @@ extern bool sec_conn;
 
 static const char *TAG = "BLE_SECURITY";
 
+static esp_ble_adv_params_t *security_adv_params = NULL;
+
+void ble_security_set_advertising_params(esp_ble_adv_params_t *adv_params)
+{
+    security_adv_params = adv_params;
+}
+
 void ble_security_disconnect(void)
 {
     if (sec_conn && connected_bda_valid)
@@ -73,6 +80,12 @@ void ble_security_enter_pairing_mode(void)
 
     pairing_window_active = true;
     pairing_window_start_ms = esp_timer_get_time() / 1000;
+
+    if (security_adv_params != NULL)
+    {
+        esp_ble_gap_start_advertising(security_adv_params);
+        ESP_LOGI(TAG, "Advertising restarted for pairing reset");
+    }
 
     ESP_LOGI(TAG, "Pairing window opened for 60 seconds");
 }

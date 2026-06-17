@@ -33,6 +33,8 @@
 #include "joystick_input.h"
 #include "ble_security.h"
 #include "usb_hid_output.h"
+#define USB_ENUM_WAIT_MS 3000
+#define USB_ENUM_POLL_MS 50
 
 /**
  * Brief:
@@ -170,7 +172,7 @@ static void hidd_event_callback(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *
         sec_conn = false;
         connected_bda_valid = false;
 
-        if (!usb_mode)
+        if (!usb_hid_output_is_ready())
         {
             esp_ble_gap_start_advertising(&hidd_adv_params);
         }
@@ -208,15 +210,15 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
             ESP_LOGD(TAG, "%x:", param->ble_security.ble_req.bd_addr[i]);
         }
 
-        if (ble_security_is_blocked_device(param->ble_security.ble_req.bd_addr))
-        {
-            ESP_LOGW(TAG, "Pairing rejected: previous device temporarily blocked");
-            esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, false);
-        }
-        else if (ble_security_is_pairing_window_active())
+        if (ble_security_is_pairing_window_active())
         {
             ESP_LOGI(TAG, "Pairing accepted: pairing window active");
             esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
+        }
+        else
+        {
+            ESP_LOGW(TAG, "Pairing rejected: pairing window closed");
+            esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, false);
         }
         break;
     case ESP_GAP_BLE_AUTH_CMPL_EVT:
@@ -251,6 +253,7 @@ void hid_main_task(void *pvParameters)
     int was_selecting = 0;
     int selection_mode = 0;
     int capitalize_next = 0;
+    int64_t last_activity_ms = 0;
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 
@@ -259,6 +262,7 @@ void hid_main_task(void *pvParameters)
 
         int button_pressed = button_input_is_pressed();
         int64_t now_ms = esp_timer_get_time() / 1000;
+        int activity_detected = 0;
         int joystick_sw_held = joystick_input_is_button_held();
         ble_security_update(now_ms);
 
@@ -287,6 +291,7 @@ void hid_main_task(void *pvParameters)
                 ESP_LOGW(TAG, "Pairing reset command received");
 
                 ble_security_enter_pairing_mode();
+                activity_detected = 1;
 
                 suppress_next_word_gap = 1;
                 continue;
@@ -296,6 +301,7 @@ void hid_main_task(void *pvParameters)
             {
                 ESP_LOGI(TAG, "Capitalize next letter");
                 capitalize_next = 1;
+                activity_detected = 1;
                 suppress_next_word_gap = 1;
                 continue;
             }
@@ -304,6 +310,7 @@ void hid_main_task(void *pvParameters)
             {
                 ESP_LOGI(TAG, "Caps Lock toggle");
                 hid_output_send_key(hid_conn_id, HID_KEY_CAPSLOCK, 0);
+                activity_detected = 1;
                 suppress_next_word_gap = 1;
                 continue;
             }
@@ -323,6 +330,8 @@ void hid_main_task(void *pvParameters)
                 }
 
                 hid_output_send_key(hid_conn_id, result.key, modifier);
+
+                activity_detected = 1;
 
                 // if (strcmp(event.sequence, "........") == 0 ||
                 //     strcmp(event.sequence, "--------") == 0 ||
@@ -362,6 +371,7 @@ void hid_main_task(void *pvParameters)
                 if (dx != 0 || dy != 0)
                 {
                     hid_output_mouse_drag_move(hid_conn_id, dx, dy);
+                    activity_detected = 1;
                     was_selecting = 1;
                 }
             }
@@ -387,6 +397,7 @@ void hid_main_task(void *pvParameters)
             if (wheel != 0)
             {
                 hid_output_mouse_scroll(hid_conn_id, wheel);
+                activity_detected = 1;
             }
         }
         else
@@ -399,6 +410,7 @@ void hid_main_task(void *pvParameters)
             if (dx != 0 || dy != 0)
             {
                 hid_output_send_mouse_move(hid_conn_id, dx, dy);
+                activity_detected = 1;
             }
         }
 
@@ -408,15 +420,23 @@ void hid_main_task(void *pvParameters)
         if (joy_event.type == JOYSTICK_EVENT_LEFT_CLICK)
         {
             hid_output_mouse_click(hid_conn_id, 0x01);
+            activity_detected = 1;
         }
         else if (joy_event.type == JOYSTICK_EVENT_RIGHT_CLICK)
         {
             hid_output_mouse_click(hid_conn_id, 0x02);
+            activity_detected = 1;
         }
         else if (joy_event.type == JOYSTICK_EVENT_SPEED_CYCLE)
         {
             joystick_input_cycle_speed();
+            activity_detected = 1;
             ESP_LOGI(TAG, "Speed cycle requested");
+        }
+
+        if (activity_detected)
+        {
+            last_activity_ms = now_ms;
         }
 
         if (usb_mode)
@@ -425,9 +445,36 @@ void hid_main_task(void *pvParameters)
         }
         else
         {
-            vTaskDelay(30 / portTICK_PERIOD_MS);
+            int64_t idle_ms = now_ms - last_activity_ms;
+
+            if (idle_ms < 3000)
+            {
+                vTaskDelay(15 / portTICK_PERIOD_MS);
+            }
+            else
+            {
+                vTaskDelay(50 / portTICK_PERIOD_MS);
+            }
         }
     }
+}
+
+static bool detect_usb_data_mode(void)
+{
+    int elapsed_ms = 0;
+
+    while (elapsed_ms < USB_ENUM_WAIT_MS)
+    {
+        if (usb_hid_output_is_ready())
+        {
+            return true;
+        }
+
+        vTaskDelay(USB_ENUM_POLL_MS / portTICK_PERIOD_MS);
+        elapsed_ms += USB_ENUM_POLL_MS;
+    }
+
+    return false;
 }
 
 void app_main(void)
@@ -460,9 +507,16 @@ void app_main(void)
     joystick_input_init();
     usb_hid_output_init();
 
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    usb_mode = detect_usb_data_mode();
 
-    usb_mode = usb_hid_output_is_ready();
+    if (usb_mode)
+    {
+        ESP_LOGI(TAG, "USB data mode detected");
+    }
+    else
+    {
+        ESP_LOGI(TAG, "No USB data detected, starting BLE mode");
+    }
 
     if (!usb_mode)
     {
@@ -509,6 +563,7 @@ void app_main(void)
 
         esp_ble_gap_register_callback(gap_event_handler);
         esp_hidd_register_callbacks(hidd_event_callback);
+        ble_security_set_advertising_params(&hidd_adv_params);
 
         esp_ble_auth_req_t auth_req = ESP_LE_AUTH_BOND;
         esp_ble_io_cap_t iocap = ESP_IO_CAP_NONE;
