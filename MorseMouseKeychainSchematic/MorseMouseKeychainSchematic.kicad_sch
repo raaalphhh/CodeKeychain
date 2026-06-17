@@ -2586,6 +2586,156 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "Switch:SW_SPST"
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "SW"
+				(at 0 3.175 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "SW_SPST"
+				(at 0 -2.54 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "Single Pole Single Throw (SPST) switch"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "switch lever"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "SW_SPST_0_0"
+				(circle
+					(center -2.032 0)
+					(radius 0.508)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -1.524 0.254) (xy 1.524 1.778)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(circle
+					(center 2.032 0)
+					(radius 0.508)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "SW_SPST_1_1"
+				(pin passive line
+					(at -5.08 0 0)
+					(length 2.54)
+					(name "A"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 5.08 0 180)
+					(length 2.54)
+					(name "B"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "power:GNDREF"
 			(power global)
 			(pin_numbers
@@ -2743,6 +2893,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "0406bae3-1b84-4fe3-b4d0-c6f19370c104")
+	)
+	(junction
+		(at 119.38 66.04)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "2ad5bea2-176c-45bd-980b-507bc04cb3be")
 	)
 	(junction
 		(at 73.66 77.47)
@@ -3257,6 +3413,17 @@
 	)
 	(wire
 		(pts
+			(xy 115.57 66.04) (xy 119.38 66.04)
+		)
+		(stroke
+			(width 0)
+			(type default)
+			(color 255 0 8 1)
+		)
+		(uuid "a34e7ad4-d8cf-4e53-8c83-d5a560ba2ef9")
+	)
+	(wire
+		(pts
 			(xy 64.77 54.61) (xy 78.74 54.61)
 		)
 		(stroke
@@ -3265,6 +3432,17 @@
 			(color 0 0 0 1)
 		)
 		(uuid "b6d2abbd-b769-4c3a-9b4e-670c4b3ecdca")
+	)
+	(wire
+		(pts
+			(xy 129.54 66.04) (xy 144.78 66.04)
+		)
+		(stroke
+			(width 0)
+			(type default)
+			(color 255 0 8 1)
+		)
+		(uuid "b6ed4c68-0dd8-4bd0-b638-c99863f959fd")
 	)
 	(wire
 		(pts
@@ -3506,14 +3684,14 @@
 	)
 	(wire
 		(pts
-			(xy 115.57 66.04) (xy 144.78 66.04)
+			(xy 119.38 66.04) (xy 120.65 66.04)
 		)
 		(stroke
 			(width 0)
 			(type default)
 			(color 255 0 8 1)
 		)
-		(uuid "f72a717c-6f0f-44a7-a0a2-d914ab65c63b")
+		(uuid "f31f6c1e-3562-424f-922c-304850f3e555")
 	)
 	(wire
 		(pts
@@ -3977,6 +4155,86 @@
 		)
 	)
 	(symbol
+		(lib_id "Switch:SW_SPST")
+		(at 124.46 66.04 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "591f5c2a-a5ee-4090-8333-a54ebf381c63")
+		(property "Reference" "SW2"
+			(at 124.46 59.69 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "SW_SPST"
+			(at 124.46 62.23 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 124.46 66.04 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 124.46 66.04 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Single Pole Single Throw (SPST) switch"
+			(at 124.46 66.04 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "8f135d06-7579-4b0f-b0f9-a01cd51bfc27")
+		)
+		(pin "2"
+			(uuid "67c01a7f-afc0-4abe-a945-aca8c00b4c04")
+		)
+		(instances
+			(project "MorseMouseKeychainSchematic"
+				(path "/36179d4a-9247-48db-9ba3-a22c64180de0"
+					(reference "SW2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:R")
 		(at 69.85 66.04 0)
 		(mirror y)
@@ -4149,7 +4407,6 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "b1707d4d-e729-4c3c-b4bd-60123bdc49dd")
 		(property "Reference" "J4"
 			(at 133.35 57.1499 0)
@@ -4163,7 +4420,7 @@
 			)
 		)
 		(property "Value" "5v Boost Converter"
-			(at 133.35 59.6899 0)
+			(at 144.526 50.038 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
